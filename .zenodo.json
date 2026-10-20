@@ -1,0 +1,41 @@
+{
+  "title": "Jounieh freeway trajectory dataset and SDPM-RAU paired comparison",
+  "description": "Processed naturalistic aerial vehicle trajectories from a weak-lane freeway in Jounieh, Lebanon, together with code and frozen outputs for a paired comparison of self-driven particle and risk-aware utility interaction models.",
+  "upload_type": "dataset",
+  "creators": [
+    {
+      "name": "Khoueiry, Michel S.",
+      "affiliation": "The George Washington University",
+      "orcid": "0009-0004-6818-9468"
+    },
+    {
+      "name": "Beigi, Pedram",
+      "affiliation": "The George Washington University"
+    },
+    {
+      "name": "Hamdar, Samer H.",
+      "affiliation": "The George Washington University",
+      "orcid": "0000-0001-6896-367X"
+    }
+  ],
+  "access_right": "open",
+  "license": "other-open",
+  "version": "1.0.0",
+  "keywords": [
+    "naturalistic trajectory data",
+    "weak lane discipline",
+    "autonomous driving",
+    "traffic modeling",
+    "drone data",
+    "Jounieh",
+    "Lebanon"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/pebeigi/AD-in-Weak-Lane-Traffic",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ],
+  "notes": "This mixed research compendium uses separate licenses: source code is MIT licensed and the trajectory dataset is CC BY 4.0 licensed. See LICENSE and data/LICENSE."
+}

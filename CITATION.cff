@@ -1,6 +1,11 @@
 cff-version: 1.2.0
 message: "If you use this code or data, please cite the paper below."
 title: "Jounieh freeway trajectory dataset and SDPM-RAU paired comparison"
+type: software
+version: 1.0.0
+date-released: 2026-10-19
+repository-code: "https://github.com/pebeigi/AD-in-Weak-Lane-Traffic"
+url: "https://github.com/pebeigi/AD-in-Weak-Lane-Traffic"
 authors:
   - family-names: Khoueiry
     given-names: Michel S.
@@ -23,7 +28,7 @@ keywords:
   - microscopic traffic modeling
 preferred-citation:
   type: article
-  title: "Weak-Lane Freeway Driving in Jounieh, Lebanon: A Naturalistic Aerial Trajectory Dataset and a Paired Comparison of Particle and Risk-Aware Interaction Models"
+  title: "Toward Autonomous Driving in Weak-Lane Freeway Traffic: A Naturalistic Trajectory Dataset and Comparative Evaluation of Interaction Models"
   authors:
     - family-names: Khoueiry
       given-names: Michel S.

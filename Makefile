@@ -1,22 +1,26 @@
 PYTHON ?= python3
 RUN = PYTHONPATH=. $(PYTHON) -m
 
-.PHONY: help data test cohort calibrate analysis all clean-cache
+.PHONY: help verify-data data test cohort calibrate analysis all clean-cache
 
 help:
-	@echo "make data       decompress data/Final_Lebanon_Data.csv.xz to ./Final_Lebanon_Data.csv"
+	@echo "make verify-data verify the compressed and uncompressed dataset checksums"
+	@echo "make data       verify and decompress data/Final_Lebanon_Data.xz to ./Final_Lebanon_Data.csv"
 	@echo "make test       determinism and model checks (analysis/test_reproducibility.py)"
 	@echo "make analysis   all post-calibration statistics, figures, tables, and macros from the stored calibration results"
 	@echo "make all        data + test + analysis"
 	@echo "make cohort     redraw corridors and the 100-trajectory cohort (only if outputs/cohorts/paired_cohort.csv is removed)"
 	@echo "make calibrate  rerun the paired GA calibration (about 22 CPU-hours; overwrites outputs/results/*_paired_results.csv)"
 
+verify-data:
+	$(RUN) analysis.verify_data
+
 data: Final_Lebanon_Data.csv
 
-Final_Lebanon_Data.csv: data/Final_Lebanon_Data.csv.xz
-	$(PYTHON) -c "import lzma, shutil; shutil.copyfileobj(lzma.open('$<'), open('$@', 'wb'), 1 << 20)"
+Final_Lebanon_Data.csv: data/Final_Lebanon_Data.xz
+	$(RUN) analysis.verify_data --extract
 
-test: data
+test: verify-data data
 	$(RUN) analysis.test_reproducibility
 
 cohort: data

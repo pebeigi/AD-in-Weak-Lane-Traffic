@@ -1,5 +1,13 @@
 # Weak-lane freeway driving in Jounieh, Lebanon
 
+[![Reproducibility checks](https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/actions/workflows/reproducibility.yml/badge.svg)](https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/actions/workflows/reproducibility.yml)
+[![GitHub release](https://img.shields.io/github/v/release/pebeigi/AD-in-Weak-Lane-Traffic?display_name=tag)](https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/releases)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB)](https://www.python.org/)
+[![Code license: MIT](https://img.shields.io/badge/code%20license-MIT-blue.svg)](LICENSE)
+[![Data license: CC BY 4.0](https://img.shields.io/badge/data%20license-CC%20BY%204.0-lightgrey.svg)](data/LICENSE)
+
+![Conceptual illustration of trajectory-aware driving on a coastal freeway](docs/social-preview.png)
+
 This repository holds the data, code, and outputs for the paper:
 
 > Khoueiry, M.S., Beigi, P., Hamdar, S.H. *Toward Autonomous Driving in Weak-Lane Freeway Traffic: A Naturalistic Trajectory Dataset and Comparative Evaluation of Interaction Models* Manuscript submitted to *Transportation Research Part C: Emerging Technologies*.
@@ -17,7 +25,9 @@ It contains:
 ```
 .
 ├── data/
-│   ├── Final_Lebanon_Data.csv.xz  compressed trajectory file
+│   ├── Final_Lebanon_Data.xz      compressed trajectory CSV
+│   ├── README.md                  data dictionary and provenance
+│   ├── CITATION.cff               dataset-specific citation metadata
 │   └── LICENSE                    data license (CC BY 4.0)
 ├── MTM_Car_Calibration.py         SDPM simulator, loss, and genetic search (historical file name)
 ├── mtm_dynamics.py                SDPM acceleration and lateral rules
@@ -35,7 +45,8 @@ It contains:
 │   ├── figures/                   all data-driven figures (PDF and PNG)
 │   └── rerun_calibration.log      log of the final calibration run
 ├── Makefile                       data, test, analysis, cohort, and calibration targets
-├── requirements.txt
+├── requirements.txt               supported dependency ranges
+├── requirements-lock.txt          exact published environment
 ├── CITATION.cff
 └── LICENSE                        code license (MIT)
 ```
@@ -44,18 +55,42 @@ The model files keep their historical names. `MTM_*` is the SDPM, and `PT_*` is 
 
 ## Requirements
 
-Python 3.9 or later with numpy, pandas, and matplotlib (`pip install -r requirements.txt`). SciPy is not needed: the bootstrap, Wilcoxon signed-rank test, Holm adjustment, and Spearman correlation are implemented in `analysis/`. The published results were produced with Python 3.9.6, numpy 2.0.2, pandas 2.3.3, and matplotlib 3.9.4 (`outputs/statistics/environment.txt`).
+Python 3.9 or later with numpy, pandas, and matplotlib. Use
+`requirements.txt` for supported dependency ranges or `requirements-lock.txt`
+to recreate the exact published Python package environment. SciPy is not
+needed: the bootstrap, Wilcoxon signed-rank test, Holm adjustment, and Spearman
+correlation are implemented in `analysis/`. The published results were
+produced with Python 3.9.6, numpy 2.0.2, pandas 2.3.3, and matplotlib 3.9.4
+(`outputs/statistics/environment.txt`).
 
 ## Reproducing the results
 
 ```bash
-pip install -r requirements.txt
-make data       # decompresses data/Final_Lebanon_Data.csv.xz to ./Final_Lebanon_Data.csv
+python -m pip install -r requirements-lock.txt
+make verify-data # checks the compressed and uncompressed SHA-256 digests
+make data       # decompresses data/Final_Lebanon_Data.xz to ./Final_Lebanon_Data.csv
 make test       # determinism and model checks
 make analysis   # all statistics, figures, tables, and LaTeX macros from the stored calibration results
 ```
 
-The uncompressed trajectory file (241 MB) exceeds GitHub's 100 MB file limit, so the repository stores it compressed. Its SHA-256 digest is `c986eac8f9cd98bc646199f9a83d2d3ad2512db805b5d006f2660f73a09c5d0c`. The analysis code reads the file but never modifies it.
+On Windows PowerShell, where `make` may not be installed, use:
+
+```powershell
+python -m pip install -r requirements-lock.txt
+.\scripts\reproduce.ps1 -Target Data
+.\scripts\reproduce.ps1 -Target Test
+.\scripts\reproduce.ps1 -Target Analysis
+```
+
+The uncompressed trajectory file (294,731,898 bytes) exceeds GitHub's 100 MB
+file limit, so the repository stores it as the 65,586,856-byte XZ archive
+`data/Final_Lebanon_Data.xz`. The archive SHA-256 is
+`0a949b5c9d93f4d4ee95a3b27fdd36e1dadd08506c5cb7461c4a6043f206ddbf`; the
+uncompressed CSV SHA-256 is
+`5807e3122a15b89dcf19e2ec13fa8d8126466267df711361801edfc5cbf9268a`.
+The verification command checks both values, and the analysis code reads the
+CSV but never modifies it. See [`data/README.md`](data/README.md) for the data
+dictionary, missing-value counts, provenance, and scope limitations.
 
 `make analysis` reads the stored calibration results in `outputs/results/` and regenerates every downstream statistic, table, and data-driven figure in `outputs/`. It also writes the manuscript's LaTeX tables and number macros to `paper/`, which is not tracked. On a laptop it takes several minutes; the first run also builds a stream index in `outputs/cache/`.
 
@@ -125,9 +160,21 @@ Please cite the paper (see `CITATION.cff`). The collection and raw extraction ar
 
 > Khoueiry, M., Haque, M., Beigi, P., Talebpour, A., Hamdar, S.H. (2025). Non-Lane-Based Acceleration Behavior on a Freeway in Jounieh, Lebanon: From Aerial Trajectory Extraction to Model Calibration. Transportation Research Board 104th Annual Meeting, Washington, DC, Paper TRBAM-25-05607.
 
+## Archival release
+
+Release metadata are prepared in `.zenodo.json`. The first archival release
+should be tagged `v1.0.0` and deposited in Zenodo. After Zenodo assigns the
+record and version DOIs, add the DOI badge here, add the DOI to `CITATION.cff`,
+and cite the dataset DOI rather than the mutable `main` branch. No DOI is
+claimed in this repository until Zenodo has minted one.
+
 ## License
 
-The code is released under the MIT License (`LICENSE`). The trajectory data in `data/` are released under the Creative Commons Attribution 4.0 International License (`data/LICENSE`).
+The code is released under the MIT License (`LICENSE`). The trajectory data in
+`data/` are released separately under the Creative Commons Attribution 4.0
+International License (`data/LICENSE`). The repository-level `CITATION.cff`
+describes the research software and preferred paper citation; reuse of the
+dataset remains governed by `data/LICENSE`.
 
 ## Contact
 

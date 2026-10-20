@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this dataset, please cite the accompanying paper and identify the release version."
+title: "Jounieh weak-lane freeway trajectory dataset"
+type: dataset
+version: 1.0.0
+date-released: 2026-10-19
+url: "https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/tree/main/data"
+authors:
+  - family-names: Khoueiry
+    given-names: Michel S.
+    affiliation: The George Washington University
+    orcid: "https://orcid.org/0009-0004-6818-9468"
+  - family-names: Beigi
+    given-names: Pedram
+    affiliation: The George Washington University
+  - family-names: Hamdar
+    given-names: Samer H.
+    affiliation: The George Washington University
+    orcid: "https://orcid.org/0000-0001-6896-367X"
+license: CC-BY-4.0
+keywords:
+  - naturalistic aerial trajectory data
+  - weak lane discipline
+  - autonomous driving
+  - traffic modeling
+  - Lebanon

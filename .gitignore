@@ -11,6 +11,7 @@ __pycache__/
 venv/
 
 # LaTeX tables and macros written by `make analysis`
+# The manuscript and all generated manuscript-side artifacts remain private.
 paper/
 
 # OS and editors

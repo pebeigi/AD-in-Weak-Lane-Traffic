@@ -1,0 +1,4 @@
+# Exact environment used for the published analysis.
+numpy==2.0.2
+pandas==2.3.3
+matplotlib==3.9.4
