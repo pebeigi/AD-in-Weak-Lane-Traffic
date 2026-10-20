@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Frame builders shared by SDPM/MMT calibration (`MTM_Car_Calibration`).
+Frame construction for SDPM calibration and paired evaluation.
 
 Adds vehicle length / width columns and neighbour tuples with bounding-box
 sizes so interaction forces use realistic dimensions.
@@ -10,17 +10,15 @@ from __future__ import annotations
 
 import math
 
-import pandas as pd
-
-from PT_Car_Calibration import NUM_NEAREST_NEIGHBORS, SAMPLE_STEP
+from rau_calibration import NUM_NEAREST_NEIGHBORS, SAMPLE_STEP
 
 
-def build_frame_data_with_dims(
+def build_frame_data_with_dimensions(
     df,
     num_nearest: int = NUM_NEAREST_NEIGHBORS,
     sample_step: int = SAMPLE_STEP,
 ):
-    """Same semantics as PT_Car_Calibration.build_frame_data, plus:
+    """Same semantics as ``rau_calibration.build_frame_data``, plus:
 
       - keys ``length_m``, ``width_m`` per ego row;
       - each neighbour tuple

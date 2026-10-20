@@ -8,7 +8,6 @@ files must match the CSVs this script writes.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import matplotlib
@@ -180,7 +179,6 @@ def main() -> None:
     lat_rows = []
     leader_abs = []
     leader_gap = []
-    hist_collect = []
     for (r, lane), sub in df.groupby(["run_id", "lane_kf"]):
         located = local_lateral(sub)
         d = located["d_lat"].to_numpy()
@@ -198,7 +196,6 @@ def main() -> None:
                 "d_std_m": float(np.std(finite)),
             }
         )
-        hist_collect.append(finite)
         # 1-second slices
         times = np.sort(located["time"].unique())
         # times are 0.1 s; take every 10th unique time present

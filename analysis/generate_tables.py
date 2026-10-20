@@ -13,14 +13,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from analysis.paired_statistics import _boot_ci, _wilcoxon
+from analysis.paired_statistics import _boot_ci
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "outputs" / "results"
 STAT = ROOT / "outputs" / "statistics"
 TAB = ROOT / "outputs" / "tables"
 PAPER = ROOT / "paper"
-PTAB = PAPER / "tables"
+PAPER_TABLES = PAPER / "tables"
 LEGACY_TAB = PAPER / "analysis_outputs" / "tables"
 
 METRIC_TEX = {
@@ -71,8 +71,8 @@ def m(name, value):
 
 
 def write(name, body):
-    PTAB.mkdir(parents=True, exist_ok=True)
-    (PTAB / f"{name}.tex").write_text(body)
+    PAPER_TABLES.mkdir(parents=True, exist_ok=True)
+    (PAPER_TABLES / f"{name}.tex").write_text(body)
 
 
 def data_table():
@@ -435,8 +435,8 @@ def main():
     body += "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(macros.items()))
     (PAPER / "numbers.tex").write_text(body)
     for name in ("tab_paired", "tab_horizon", "tab_params"):
-        if (PTAB / f"{name}.tex").exists():
-            shutil.copy(PTAB / f"{name}.tex", TAB / f"{name}_rows.tex")
+        if (PAPER_TABLES / f"{name}.tex").exists():
+            shutil.copy(PAPER_TABLES / f"{name}.tex", TAB / f"{name}_rows.tex")
     print(f"{len(macros)} macros written")
 
 

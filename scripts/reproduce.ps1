@@ -37,12 +37,12 @@ try {
                 "analysis.plot_corridors",
                 "analysis.dataset_figures",
                 "analysis.paired_statistics",
-                "analysis.final_diagnostics",
+                "analysis.model_diagnostics",
                 "analysis.transfer_and_sensitivity",
                 "analysis.interaction_regime",
                 "analysis.generate_paper_figures",
                 "analysis.generate_tables",
-                "analysis.width_audit"
+                "analysis.recording_dimension_audit"
             )) {
                 Invoke-PythonModule $module
             }

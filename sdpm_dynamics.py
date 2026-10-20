@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-World-frame acceleration for the Kanagaraj & Treiber (2018) SDPM / MTM used in
-``MTM_Car_Calibration``.
+World-frame acceleration for the adapted Kanagaraj & Treiber (2018) SDPM used
+in ``sdpm_calibration``.
 
 The published model is axis-aligned to a local road frame. Here the highway
 corridor is approximated by using a **goal direction** (toward the trip
 destination) as the longitudinal axis and its left normal for lateral speed,
-which matches how ``MTM_Car_Calibration`` already supplies world ``(vx, vy)``
+which matches how ``sdpm_calibration`` supplies world ``(vx, vy)``
 and destination points.
 
 This is a compact realisation of the paper’s IDM-based longitudinal core with
@@ -57,7 +57,7 @@ def _idm_free_acceleration(v: float, v0: float, a: float) -> float:
     return a * (1.0 - (v / max(v0, 1e-6)) ** IDM_DELTA)
 
 
-def mtm_acceleration_world(
+def sdpm_acceleration_world(
     x: float,
     y: float,
     vx: float,

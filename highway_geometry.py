@@ -75,40 +75,6 @@ def envelope_lower_upper_polylines(run_id, lane_kf):
     return lane_boundary_polylines_m(run_id, lane_kf)
 
 
-def _segment_distance(px, py, poly):
-    """Minimum distance from points (px, py) to a polyline. px, py broadcastable."""
-    if poly is None or len(poly) < 2:
-        return np.full(np.broadcast(px, py).shape, np.inf)
-    a = poly[:-1]
-    b = poly[1:]
-    ab = b - a
-    ab2 = np.sum(ab * ab, axis=1)
-    ab2 = np.where(ab2 < 1e-12, 1e-12, ab2)
-    px = np.asarray(px, dtype=float)
-    py = np.asarray(py, dtype=float)
-    flat_x = px.ravel()
-    flat_y = py.ravel()
-    # (N, S)
-    ax = a[:, 0][None, :]
-    ay = a[:, 1][None, :]
-    t = ((flat_x[:, None] - ax) * ab[None, :, 0] + (flat_y[:, None] - ay) * ab[None, :, 1]) / ab2
-    t = np.clip(t, 0.0, 1.0)
-    qx = ax + t * ab[None, :, 0]
-    qy = ay + t * ab[None, :, 1]
-    d = np.hypot(flat_x[:, None] - qx, flat_y[:, None] - qy)
-    out = d.min(axis=1)
-    return out.reshape(px.shape)
-
-
-def boundary_clearance(px, py, run_id, lane_kf):
-    lines = lane_boundary_polylines_m(run_id, lane_kf)
-    if lines is None:
-        return None
-    d_lo = _segment_distance(px, py, lines[0])
-    d_hi = _segment_distance(px, py, lines[1])
-    return np.minimum(d_lo, d_hi)
-
-
 def inside_clearance(px, py, run_id, lane_kf):
     """Signed distance to the nearer percentile boundary.
 
@@ -146,15 +112,6 @@ def inside_clearance(px, py, run_id, lane_kf):
     hi_q = (1.0 - tt) * hi[j] + tt * hi[j + 1]
     clear = np.minimum(lat - lo_q, hi_q - lat)
     return clear.reshape(shape)
-
-
-def max_boundary_collision_prob(ex_px, ex_py, run_id, lane_kf, threshold_m, sigma_b):
-    clear = inside_clearance(ex_px, ex_py, run_id, lane_kf)
-    if clear is None:
-        return 0.0
-    sigma = max(float(sigma_b), 1e-6)
-    z = (float(np.asarray(clear).reshape(-1)[0]) - float(threshold_m)) / sigma
-    return float(0.5 * (1.0 - math.erf(z / math.sqrt(2.0))))
 
 
 def boundary_prob_array(ex, ey, run_id, lane_kf, threshold_m, sigma_b):

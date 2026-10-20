@@ -16,11 +16,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from MTM_Car_Calibration import compute_mtm_metrics
-from PT_Car_Calibration import (
-    choose_car_velocity_direction,
-    compute_car_metrics,
-    simulate_car_single_agent,
+from sdpm_calibration import compute_sdpm_metrics
+from rau_calibration import (
+    select_rau_acceleration,
+    compute_rau_metrics,
+    simulate_rau_single_agent,
 )
 
 
@@ -72,44 +72,46 @@ class ModelChecks(unittest.TestCase):
 
     def test_same_parameters_same_trajectory(self):
         fd = _frames()
-        a = compute_car_metrics(fd, RAU, 7, clip_to_envelope=False)
-        b = compute_car_metrics(fd, RAU, 7, clip_to_envelope=False)
+        a = compute_rau_metrics(fd, RAU, 7, clip_to_envelope=False)
+        b = compute_rau_metrics(fd, RAU, 7, clip_to_envelope=False)
         self.assertEqual(a["Error"], b["Error"])
         self.assertEqual(a["sim_x"], b["sim_x"])
         # Default generator comes from the canonical key in the frames.
-        sa = compute_mtm_metrics(fd, SDPM, 7, clip_to_envelope=False)
-        sb = compute_mtm_metrics(fd, SDPM, 7, clip_to_envelope=False)
+        sa = compute_sdpm_metrics(fd, SDPM, 7, clip_to_envelope=False)
+        sb = compute_sdpm_metrics(fd, SDPM, 7, clip_to_envelope=False)
         self.assertEqual(sa["Error"], sb["Error"])
         self.assertEqual(sa["sim_x"], sb["sim_x"])
 
     def test_same_id_other_recording_differs(self):
         fd = _frames()
         other = {t: [dict(u, run_id=2.0) for u in us] for t, us in fd.items()}
-        a = compute_car_metrics(fd, RAU, 7, clip_to_envelope=False)
-        b = compute_car_metrics(other, RAU, 7, clip_to_envelope=False)
+        a = compute_rau_metrics(fd, RAU, 7, clip_to_envelope=False)
+        b = compute_rau_metrics(other, RAU, 7, clip_to_envelope=False)
         self.assertNotEqual(a["sim_x"], b["sim_x"])
 
     def test_ga_search_runs_single_worker(self):
-        from MTM_Car_Calibration import run_ga_mtm
+        from sdpm_calibration import run_sdpm_calibration
 
         fd = _frames()
-        vec, fit, _, _ = run_ga_mtm(fd, 7, pop_size=4, generations=2, clip_to_envelope=False, search_seed=1)
+        vec, fit, _, _ = run_sdpm_calibration(
+            fd, 7, pop_size=4, generations=2, clip_to_envelope=False, search_seed=1
+        )
         self.assertEqual(len(vec), 9)
         self.assertTrue(0.0 < fit <= 1.0)
 
     def test_overlap_lateral_response_is_repulsive(self):
-        from mtm_dynamics import mtm_acceleration_world
+        from sdpm_dynamics import sdpm_acceleration_world
 
         for dy in (0.5, -0.5, 2.5, -2.5):
-            _, ay, _ = mtm_acceleration_world(
+            _, ay, _ = sdpm_acceleration_world(
                 0, 0, 15, 0, [(6, dy, 8, 0, 4.8, 1.8)], SDPM, 1, 1, 1000, 0, 4.8, 1.8
             )
             self.assertLess(ay * dy, 0.0)
 
     def test_finite_outputs(self):
         fd = _frames()
-        a = compute_car_metrics(fd, RAU, 7, clip_to_envelope=False)
-        s = compute_mtm_metrics(
+        a = compute_rau_metrics(fd, RAU, 7, clip_to_envelope=False)
+        s = compute_sdpm_metrics(
             fd, SDPM, 7, clip_to_envelope=False, rng=random.Random(1)
         )
         for m in (a, s):
@@ -119,7 +121,7 @@ class ModelChecks(unittest.TestCase):
             self.assertTrue(all(math.isfinite(v) for v in m["sim_speed"]))
 
     def test_no_nan_rollout(self):
-        r1 = simulate_car_single_agent(
+        r1 = simulate_rau_single_agent(
             0, 0, 5, 0, RAU,
             [(8, 1, 5, 0, 4.5, 1.8)],
             40, 0,
@@ -127,7 +129,7 @@ class ModelChecks(unittest.TestCase):
             rng=random.Random(7),
             clip_to_envelope=False,
         )
-        r2 = simulate_car_single_agent(
+        r2 = simulate_rau_single_agent(
             0, 0, 5, 0, RAU,
             [(8, 1, 5, 0, 4.5, 1.8)],
             40, 0,
@@ -140,7 +142,7 @@ class ModelChecks(unittest.TestCase):
 
     def test_commanded_speed_nonnegative(self):
         # The grid speed is max(0, v + a*dt). The returned command is a velocity.
-        vx, vy = choose_car_velocity_direction(
+        vx, vy = select_rau_acceleration(
             0, 0, 8, 0, RAU, [(12, 1, 7, 0, 4.5, 1.8)], 40, 0, dt=0.1
         )
         self.assertTrue(math.isfinite(vx) and math.isfinite(vy))
@@ -152,7 +154,7 @@ class ModelChecks(unittest.TestCase):
         self.assertGreaterEqual(len(nbs), 4)
         self.assertEqual(len(nbs[0]), 6)
         # The simulator must accept the 6-tuple the cohort builder stores.
-        simulate_car_single_agent(
+        simulate_rau_single_agent(
             100, 50, 8, 0, RAU, nbs[:4], 140, 51,
             total_dt=0.5, rng=random.Random(3), clip_to_envelope=False,
         )

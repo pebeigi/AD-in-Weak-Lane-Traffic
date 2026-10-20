@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Car calibration using a Prospect Theory (PT)-style model.
+Risk-aware utility (RAU) model calibration.
 
 New input data: `Final_Lebanon_Data.csv` with columns:
   - id, time, xloc_kf, yloc_kf, lane_kf, speed_kf, acceleration_kf, length_smoothed, width_smoothed, class, run_id
@@ -10,14 +10,14 @@ We calibrate cars separately for each combination of:
   - lane_kf (direction: east->west vs west->east)
 
 Within each (run_id, lane_kf) subset we run GA calibration per `id` and save results into:
-  - ./pt_car_calibration/run_{run_id}_lane_{lane_kf}/
+  - ./rau_calibration_outputs/run_{run_id}_direction_{lane_kf}/
 
 The same trajectory figure is also mirrored to ./comparison_visualizations/ with names like
-run_{run_id}_lane_{lane_kf}_id_{id}_PT_GA.png (disable with `--no-comparison-plots`).
+run_{run_id}_direction_{lane_kf}_id_{id}_RAU.png (disable with `--no-comparison-plots`).
 
-Speed (same PT model; for testing use coarser frames / smaller GA / parallel fitness):
-  python PT_Car_Calibration.py --fast --workers 6
-  python PT_Car_Calibration.py --fast --workers 8 --max-vehicles 2 --sample-step 5
+For a quick check, use coarser frames and a smaller parallel search:
+  python rau_calibration.py --fast --workers 6
+  python rau_calibration.py --fast --workers 8 --max-vehicles 2 --sample-step 5
 """
 
 import numpy as np
@@ -41,7 +41,6 @@ from highway_geometry import (
     envelope_lower_upper_polylines,
     lane_boundary_polylines_m,
     load_envelope_boundaries,
-    max_boundary_collision_prob,
 )
 
 from comparison_exports import (
@@ -67,7 +66,7 @@ ELITISM_COUNT = 4
 # Closed-loop early stop on ATE (m) — R² of step changes is rarely satisfied on noisy real data.
 ATE_STOP_M = 2.0
 
-OUTPUT_DIR = "./pt_car_calibration"
+OUTPUT_DIR = "./rau_calibration_outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Loss = WEIGHT_POSITION * SSE_pos / SS_obs_pos + WEIGHT_SPEED * SSE_speed / SS_obs_speed
@@ -75,7 +74,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 WEIGHT_POSITION = 1.0
 WEIGHT_SPEED = 0.5
 
-# Car PT: anticipation horizon (s) and collision threshold (m) — decoupled from dt to avoid myopic risk
+# RAU anticipation horizon (s) and collision threshold (m), decoupled from dt.
 T_ANTICIPATION = 2.0       # seconds ahead for collision evaluation (highway: 2–3 s)
 COLLISION_THRESHOLD = 4.0  # min safe distance (m); car length + buffer
 ACCEL_PENALTY_COEF = 0.5   # penalty for harsh acceleration in utility
@@ -103,7 +102,7 @@ def _boundary_prob_grid(ex, ey, run_id, lane_kf, sigma_b):
 # 2) LOAD AND PREPROCESS DATA
 ##############################################################################
 
-def load_and_preprocess(csv_path):
+def load_trajectory_data(csv_path):
     """Load `Final_Lebanon_Data.csv` and map columns to internal names:
     object_ID = id, x_m = xloc_kf, y_m = yloc_kf, time = time.
     Keeps lane_kf and run_id for later subset calibration.
@@ -136,7 +135,7 @@ def load_and_preprocess(csv_path):
 # 3) VELOCITIES FROM POSITION DIFFERENCES (per object_ID)
 ##############################################################################
 
-def compute_velocities(df):
+def compute_velocity_components(df):
     """Add vx, vy (m/s) per row using finite difference per object_ID."""
     df = df.copy()
     df["vx"] = np.nan
@@ -162,11 +161,11 @@ def compute_velocities(df):
     return df
 
 ##############################################################################
-# 4) PARAMETER VECTOR (car-only: 2 collision weights + 4 PT params)
+# 4) RAU PARAMETER VECTOR (two risk weights and four utility/noise parameters)
 #    [Wc_cc, eta, xi, tau, v_pref, W_boundary]
 ##############################################################################
 
-def random_car_params():
+def random_rau_parameters():
     return [
         random.uniform(100, 1000),   # Wc_cc (car-car collision weight)
         random.uniform(1, 5),       # eta
@@ -176,7 +175,7 @@ def random_car_params():
         random.uniform(10, 200),  # W_boundary (highway envelope penalty; same scale as Wc_cc)
     ]
 
-def clamp_car_params(p):
+def clamp_rau_parameters(p):
     p[0] = min(max(p[0], 10), 5000)
     p[1] = min(max(p[1], 0.1), 10)
     p[2] = min(max(p[2], 0.1), 15)
@@ -185,7 +184,7 @@ def clamp_car_params(p):
     p[5] = min(max(p[5], 0.0), 10000.0)
     return p
 
-def mutate_car_params(p, rate=0.2):
+def mutate_rau_parameters(p, rate=0.2):
     for i in range(len(p)):
         if random.random() < rate:
             if i == 0:
@@ -198,19 +197,19 @@ def mutate_car_params(p, rate=0.2):
                 p[i] += random.uniform(-150, 150)
             else:
                 p[i] += random.uniform(-2, 2)
-    return clamp_car_params(p)
+    return clamp_rau_parameters(p)
 
-def crossover_car_params(p1, p2):
+def crossover_rau_parameters(p1, p2):
     idx = random.randint(1, len(p1) - 1)
     c1 = p1[:idx] + p2[idx:]
     c2 = p2[:idx] + p1[idx:]
-    return clamp_car_params(c1), clamp_car_params(c2)
+    return clamp_rau_parameters(c1), clamp_rau_parameters(c2)
 
 ##############################################################################
-# 5) PT-STYLE CHOICE FOR CAR — anticipation horizon, speed-based sigma, accel penalty
+# 5) RAU CHOICE — anticipation horizon, speed-based sigma, acceleration penalty
 ##############################################################################
 
-def choose_car_velocity_direction(
+def select_rau_acceleration(
     px, py, vx, vy, pvec, neighbors, dest_x, dest_y, dt=0.1, lane_kf=None, run_id=None
 ):
     """Decoupled T_anticipation from dt to avoid myopic risk. Search over acceleration + angle. Returns (ax, ay)."""
@@ -233,17 +232,8 @@ def choose_car_velocity_direction(
         goal_theta - math.radians(15), goal_theta + math.radians(15), 10
     )
 
-    best_utility = -1e9
     best_v = curr_speed
     best_th = goal_theta
-
-    def subjective_value(v_, th_):
-        align = max(0.0, math.cos(th_ - goal_theta))
-        if v_pref <= 1e-9:
-            return 0.0
-        ratio = v_ / v_pref
-        denom = (1.0 + ratio) ** (xi / 2.0)
-        return (eta * align) * (ratio / denom)
 
     use_boundary = lane_boundary_polylines_m(run_id, lane_kf) is not None
     # Same 20 x 10 grid as the previous scalar loop. Evaluated as arrays so the
@@ -295,10 +285,10 @@ def choose_car_velocity_direction(
     ay = (vy_fin - vy) / dt
     return ax, ay
 
-def pt_car_acceleration(
+def rau_acceleration(
     px, py, vx, vy, pvec, neighbors, dest_x, dest_y, dt=0.1, lane_kf=None, run_id=None
 ):
-    return choose_car_velocity_direction(
+    return select_rau_acceleration(
         px, py, vx, vy, pvec, neighbors, dest_x, dest_y, dt, lane_kf=lane_kf, run_id=run_id
     )
 
@@ -306,7 +296,7 @@ def pt_car_acceleration(
 # 6) SINGLE-AGENT SIMULATION (car)
 ##############################################################################
 
-def simulate_car_single_agent(
+def simulate_rau_single_agent(
     px,
     py,
     vx,
@@ -325,7 +315,7 @@ def simulate_car_single_agent(
     rng=None,
 ):
     """
-    Single-agent forward step(s); matches PT_Car_Simulation.run_substep integrator.
+    Advance one RAU agent through one or more integration substeps.
     If clip_to_envelope: project (x,y) into the L/U lane envelope after spawn and each substep
     (same as multi-agent sim). If clip_to_envelope and clip_initial is False, the pre-step snap
     is skipped so the first position matches a logged state (e.g. calibration at GPS); substeps
@@ -350,7 +340,7 @@ def simulate_car_single_agent(
         g = goal_ahead(x, y, run_id, lane_kf)
         if g is not None:
             dest_x, dest_y = g
-        ax, ay = pt_car_acceleration(
+        ax, ay = rau_acceleration(
             x, y, vx_, vy_, pvec, nb_list, dest_x, dest_y, dt=h, lane_kf=lane_kf, run_id=run_id
         )
         wx = wx * (1.0 - h / tau) + math.sqrt(h) * rng.gauss(0, 1)
@@ -390,7 +380,7 @@ def simulate_car_single_agent(
 
 def build_frame_data(df, num_nearest=NUM_NEAREST_NEIGHBORS, sample_step=SAMPLE_STEP):
     # Per-ID destination = last (x_m, y_m) for that ID in df (must be time-ordered: pandas "last"
-    # is last row in group, not max(time). Same convention as PT_Car_Simulation.build_actual_and_meta.)
+    # is the last row in the group, rather than max(time).
     df = df.sort_values(["object_ID", "time"], kind="mergesort").reset_index(drop=True)
     id_last = df.groupby("object_ID", sort=False).agg({"x_m": "last", "y_m": "last"}).to_dict("index")
     id_to_dest = {oid: (id_last[oid]["x_m"], id_last[oid]["y_m"]) for oid in id_last}
@@ -447,7 +437,7 @@ def build_frame_data(df, num_nearest=NUM_NEAREST_NEIGHBORS, sample_step=SAMPLE_S
 # 8) METRICS
 ##############################################################################
 
-def compute_car_metrics(
+def compute_rau_metrics(
     frame_data,
     pvec,
     focus_id,
@@ -532,7 +522,7 @@ def compute_car_metrics(
         resynced = False
         # Snap only when continuing from a simulated (possibly off-lane) state, not at GPS.
         clip_initial = not from_logged
-        pxp, pyp, vxp, vyp = simulate_car_single_agent(
+        pxp, pyp, vxp, vyp = simulate_rau_single_agent(
             x, y, vx, vy, pvec, nb1, u1["dest_x"], u1["dest_y"],
             total_dt=dt,
             substeps=5,
@@ -630,7 +620,7 @@ def compute_car_metrics(
 # 9) GENETIC ALGORITHM
 ##############################################################################
 
-def evaluate_population(
+def evaluate_rau_population(
     frame_data,
     population,
     focus_id,
@@ -638,7 +628,7 @@ def evaluate_population(
     envelope_clip_margin_m=0.35,
 ):
     return [
-        compute_car_metrics(
+        compute_rau_metrics(
             frame_data,
             pvec,
             focus_id,
@@ -665,7 +655,7 @@ def _mp_init_eval(frame_data, focus_id, clip_to_envelope, envelope_clip_margin_m
 
 
 def _mp_eval_error(pvec):
-    return compute_car_metrics(
+    return compute_rau_metrics(
         _MP_FRAME,
         pvec,
         _MP_FOCUS,
@@ -682,9 +672,9 @@ def evaluate_population_parallel(
     clip_to_envelope=True,
     envelope_clip_margin_m=0.35,
 ):
-    """Same fitness as evaluate_population, distributed across processes."""
+    """Same fitness as ``evaluate_rau_population``, distributed across processes."""
     if n_workers <= 1:
-        return evaluate_population(
+        return evaluate_rau_population(
             frame_data,
             population,
             focus_id,
@@ -710,7 +700,7 @@ def evaluate_population_parallel(
             pool.join()
 
 
-def run_ga_for_id(
+def run_rau_calibration(
     frame_data_sub,
     focus_id,
     pop_size=POP_SIZE,
@@ -730,7 +720,7 @@ def run_ga_for_id(
         random.seed(execution_seed(run_id, lane_kf, vid, "rau-search"))
     else:
         random.seed(int(search_seed))
-    population = [clamp_car_params(random_car_params()) for _ in range(pop_size)]
+    population = [clamp_rau_parameters(random_rau_parameters()) for _ in range(pop_size)]
     best_vec, best_score = None, -1e9
     error_history = []  # weighted_MSE of running best per generation (monotonically non-increasing)
     for gen in range(generations):
@@ -749,7 +739,7 @@ def run_ga_for_id(
         # Convert fitness back to weighted_MSE: Error = 1/(1+weighted_MSE) -> weighted_MSE = 1/Error - 1.
         err_running = (1.0 / best_score - 1.0) if best_score > 1e-12 else float("inf")
         error_history.append(float(err_running))
-        curr_metrics = compute_car_metrics(
+        curr_metrics = compute_rau_metrics(
             frame_data_sub,
             best_vec,
             focus_id,
@@ -766,14 +756,14 @@ def run_ga_for_id(
             k = min(3, len(pop_sorted))
             p1 = max(random.sample(pop_sorted, k), key=lambda z: z[1])[0]
             p2 = max(random.sample(pop_sorted, k), key=lambda z: z[1])[0]
-            c1, c2 = crossover_car_params(p1, p2)
-            new_pop.append(mutate_car_params(c1, MUTATION_RATE))
+            c1, c2 = crossover_rau_parameters(p1, p2)
+            new_pop.append(mutate_rau_parameters(c1, MUTATION_RATE))
             if len(new_pop) < pop_size:
-                new_pop.append(mutate_car_params(c2, MUTATION_RATE))
+                new_pop.append(mutate_rau_parameters(c2, MUTATION_RATE))
         population = new_pop[:pop_size]
         if (gen + 1) % 10 == 0:
             print(f"GA gen={gen+1}, best fitness={best_score:.5f}")
-    final_metrics = compute_car_metrics(
+    final_metrics = compute_rau_metrics(
         frame_data_sub,
         best_vec,
         focus_id,
@@ -786,14 +776,14 @@ def run_ga_for_id(
 # 10) PREDICTIONS FOR ONE VEHICLE
 ##############################################################################
 
-def get_predictions_for_vehicle(
+def get_rau_predictions(
     frame_data_sub,
     params,
     focus_id,
     clip_to_envelope=True,
     envelope_clip_margin_m=0.35,
 ):
-    """One row per segment end t2, same as whole-trip `compute_car_metrics` roll-out."""
+    """One row per segment end t2, matching the whole-trip RAU rollout."""
     times_list = sorted(frame_data_sub.keys())
     if len(times_list) < 2:
         return pd.DataFrame([])
@@ -844,7 +834,7 @@ def get_predictions_for_vehicle(
         from_logged = (i == 0) or resynced
         resynced = False
         clip_initial = not from_logged
-        pxp, pyp, vxp, vyp = simulate_car_single_agent(
+        pxp, pyp, vxp, vyp = simulate_rau_single_agent(
             x, y, vx, vy, params, nb1, u1["dest_x"], u1["dest_y"],
             total_dt=dt,
             substeps=5,
@@ -866,10 +856,10 @@ def get_predictions_for_vehicle(
     return pd.DataFrame(rows)
 
 ##############################################################################
-# 11) SAVE PLOT: 2x3 subplots — Actual vs PT (xy, t-x, t-y, t-vx, t-vy, GA error)
+# 11) SAVE PLOT: 2x3 subplots — observed vs RAU
 ##############################################################################
 
-def save_trajectory_plot(
+def save_rau_trajectory_plot(
     df_pred,
     agent_id,
     output_dir,
@@ -877,7 +867,7 @@ def save_trajectory_plot(
     lane_kf=None,
     error_history=None,
     comparison_dir=None,
-    comparison_model_slug="PT_GA",
+    comparison_model_slug="RAU",
 ):
     """One figure, 2 rows x 3 cols:
     Row 0: xy trajectory | time vs x | time vs y
@@ -917,7 +907,7 @@ def save_trajectory_plot(
             pred + band,
             color="r",
             alpha=0.18,
-            label="PT uncertainty band",
+            label="RAU uncertainty band",
             zorder=1,
         )
         ax.plot(t, obs, "b-o", label=obs_label, markersize=4, zorder=3)
@@ -929,7 +919,7 @@ def save_trajectory_plot(
         ax.grid(True, alpha=0.3)
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-    # (0,0) xy: Actual vs PT trajectory (+ envelope)
+    # (0,0) xy: observed vs RAU trajectory (+ envelope)
     ax_xy = axes[0, 0]
     polys = envelope_lower_upper_polylines(run_id, lane_kf)
     if polys is not None:
@@ -943,7 +933,7 @@ def save_trajectory_plot(
             label="Envelope upper", zorder=0,
         )
     ax_xy.plot(df_pred["x_obs"], df_pred["y_obs"], "b-o", label="Actual", markersize=4, zorder=2)
-    ax_xy.plot(df_pred["x_pred"], df_pred["y_pred"], "r-x", label="PT simulated", markersize=4, zorder=2)
+    ax_xy.plot(df_pred["x_pred"], df_pred["y_pred"], "r-x", label="RAU simulated", markersize=4, zorder=2)
     ax_xy.set_xlabel("x (m)")
     ax_xy.set_ylabel("y (m)")
     ax_xy.set_title("xy trajectory")
@@ -958,7 +948,7 @@ def save_trajectory_plot(
         df_pred["x_obs"],
         df_pred["x_pred"],
         "Actual x",
-        "PT x",
+        "RAU x",
         "x (m)",
         "Time vs x",
     )
@@ -970,7 +960,7 @@ def save_trajectory_plot(
         df_pred["y_obs"],
         df_pred["y_pred"],
         "Actual y",
-        "PT y",
+        "RAU y",
         "y (m)",
         "Time vs y",
     )
@@ -982,7 +972,7 @@ def save_trajectory_plot(
         df_pred["vx_obs"],
         df_pred["vx_pred"],
         "Actual vx",
-        "PT vx",
+        "RAU vx",
         "vx (m/s)",
         "Time vs x-speed",
     )
@@ -994,7 +984,7 @@ def save_trajectory_plot(
         df_pred["vy_obs"],
         df_pred["vy_pred"],
         "Actual vy",
-        "PT vy",
+        "RAU vy",
         "vy (m/s)",
         "Time vs y-speed",
     )
@@ -1014,11 +1004,7 @@ def save_trajectory_plot(
     else:
         ax_err.text(0.5, 0.5, "No error history", ha="center", va="center", transform=ax_err.transAxes)
         ax_err.set_axis_off()
-    subtitle = (
-        f"Vehicle ID {agent_id} — PT + RL simulated"
-        if comparison_model_slug == "PT_RL"
-        else f"Vehicle ID {agent_id} — Actual vs PT simulated (GA)"
-    )
+    subtitle = f"Vehicle ID {agent_id} — observed vs {comparison_model_slug} simulated"
     fig.suptitle(subtitle, y=1.02)
     plt.tight_layout()
     out_path = os.path.join(output_dir, f"trajectory_id_{agent_id}.png")
@@ -1034,7 +1020,7 @@ def save_trajectory_plot(
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="PT car calibration. Use --fast and --workers for quicker test runs (same model)."
+        description="RAU calibration. Use --fast and --workers for quicker test runs."
     )
     p.add_argument(
         "--fast",
@@ -1083,7 +1069,7 @@ def parse_args():
     p.add_argument(
         "--no-envelope-clip",
         action="store_true",
-        help="Disable hard position projection to the lane envelope (match PT_Car_Simulation --no-envelope-clip).",
+        help="Disable hard position projection to the roadway envelope.",
     )
     p.add_argument(
         "--envelope-clip-margin",
@@ -1133,22 +1119,22 @@ def _main_calibration():
     else:
         print(
             "No envelope CSV found (run derive_boundaries_envelope.py first); "
-            "PT boundary penalty disabled until file exists."
+            "RAU boundary penalty disabled until the file exists."
         )
     print("Loading and preprocessing CSV...")
-    df = load_and_preprocess(CSV_PATH)
+    df = load_trajectory_data(CSV_PATH)
     print(f"Rows after preprocess: {len(df)}")
 
     df = df[df["class"] == CAR_CLASS_CODE].copy()
     print(f"Rows after car class filter (class={CAR_CLASS_CODE}): {len(df)}")
 
     print("Computing velocities...")
-    df = compute_velocities(df)
+    df = compute_velocity_components(df)
 
     runs = sorted(df["run_id"].unique().tolist())
-    lanes = sorted(df["lane_kf"].unique().tolist())
+    direction_codes = sorted(df["lane_kf"].unique().tolist())
     print(f"Found run_id values: {runs}")
-    print(f"Found lane_kf values: {lanes}")
+    print(f"Found direction codes (dataset column 'lane_kf'): {direction_codes}")
     print(
         f"Calibration settings: pop_size={pop_size}, generations={generations}, "
         f"sample_step={sample_step}, min_presence={min_presence}, workers={n_workers}, "
@@ -1171,15 +1157,19 @@ def _main_calibration():
     any_calibrated = False
 
     for run_id in runs:
-        for lane_val in lanes:
-            df_combo = df[(df["run_id"] == run_id) & (df["lane_kf"] == lane_val)].copy()
+        for direction_code in direction_codes:
+            df_combo = df[
+                (df["run_id"] == run_id) & (df["lane_kf"] == direction_code)
+            ].copy()
             if df_combo.empty:
                 continue
 
             # output folder for this (run_id, lane_kf)
-            lane_tag = str(lane_val).replace(".", "_")
+            direction_tag = str(direction_code).replace(".", "_")
             run_tag = str(run_id).replace(".", "_")
-            out_dir_combo = os.path.join(OUTPUT_DIR, f"run_{run_tag}_lane_{lane_tag}")
+            out_dir_combo = os.path.join(
+                OUTPUT_DIR, f"run_{run_tag}_direction_{direction_tag}"
+            )
             os.makedirs(out_dir_combo, exist_ok=True)
 
             counts = df_combo.groupby("object_ID").size()
@@ -1194,11 +1184,17 @@ def _main_calibration():
             if args.max_vehicles is not None:
                 candidates = candidates[: int(args.max_vehicles)]
             if not candidates:
-                print(f"Skip run_id={run_id}, lane_kf={lane_val}: no IDs with >= min_presence={min_presence}.")
+                print(
+                    f"Skip run_id={run_id}, direction={direction_code}: "
+                    f"no IDs with >= min_presence={min_presence}."
+                )
                 continue
 
             any_calibrated = True
-            print(f"\nCalibrating combo run_id={run_id}, lane_kf={lane_val} -> {len(candidates)} vehicles")
+            print(
+                f"\nCalibrating run_id={run_id}, direction={direction_code} "
+                f"-> {len(candidates)} vehicles"
+            )
 
             all_results = []
             all_predictions = []
@@ -1214,7 +1210,7 @@ def _main_calibration():
                     print("  Skip: not enough frames.")
                     continue
 
-                best_vec, best_fit, best_mets, err_hist = run_ga_for_id(
+                best_vec, best_fit, best_mets, err_hist = run_rau_calibration(
                     frame_data_sub,
                     agent_id,
                     pop_size=pop_size,
@@ -1230,7 +1226,7 @@ def _main_calibration():
                     rowdict[name] = best_vec[i]
                 all_results.append(rowdict)
 
-                df_pred = get_predictions_for_vehicle(
+                df_pred = get_rau_predictions(
                     frame_data_sub,
                     best_vec,
                     agent_id,
@@ -1243,23 +1239,25 @@ def _main_calibration():
                     df_pred["ADE"] = best_mets["ADE"]
                     df_pred["FDE"] = best_mets["FDE"]
                     all_predictions.append(df_pred)
-                    save_trajectory_plot(
+                    save_rau_trajectory_plot(
                         df_pred, agent_id, out_dir_combo,
-                        run_id=run_id, lane_kf=lane_val, error_history=err_hist,
+                        run_id=run_id,
+                        lane_kf=direction_code,
+                        error_history=err_hist,
                         comparison_dir=comparison_dir,
-                        comparison_model_slug="PT_GA",
+                        comparison_model_slug="RAU",
                     )
                     print(f"  Saved plot: trajectory_id_{agent_id}.png")
 
             # Save combo results
             df_res = pd.DataFrame(all_results)
-            out_csv = os.path.join(out_dir_combo, "pt_car_calib_all_ids.csv")
+            out_csv = os.path.join(out_dir_combo, "rau_calibration_results.csv")
             df_res.to_csv(out_csv, index=False)
             print(f"Saved combo results: {out_csv} ({len(df_res)} rows)")
 
             if all_predictions:
                 df_pred_all = pd.concat(all_predictions, ignore_index=True)
-                out_pred_csv = os.path.join(out_dir_combo, "pt_car_predictions_all_ids.csv")
+                out_pred_csv = os.path.join(out_dir_combo, "rau_predictions.csv")
                 df_pred_all.to_csv(out_pred_csv, index=False)
                 print(f"Saved combo predictions: {out_pred_csv}")
 

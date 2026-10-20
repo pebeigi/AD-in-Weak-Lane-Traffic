@@ -23,13 +23,13 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from MTM_Car_Calibration import (  # noqa: E402
-    compute_mtm_metrics,
-    run_ga_mtm,
+from sdpm_calibration import (  # noqa: E402
+    compute_sdpm_metrics,
+    run_sdpm_calibration,
 )
-from PT_Car_Calibration import (  # noqa: E402
-    compute_car_metrics,
-    run_ga_for_id,
+from rau_calibration import (  # noqa: E402
+    compute_rau_metrics,
+    run_rau_calibration,
 )
 import highway_geometry  # noqa: E402
 
@@ -415,7 +415,7 @@ def _split(frames: dict):
 def _ga(kind: str, frames, oid, pop, gen, seed):
     """Existing crossover GA. Search seed is explicit so two runs can differ."""
     if kind == "RAU":
-        vec, fit, _, hist = run_ga_for_id(
+        vec, fit, _, hist = run_rau_calibration(
             frames,
             oid,
             pop_size=pop,
@@ -425,7 +425,7 @@ def _ga(kind: str, frames, oid, pop, gen, seed):
             search_seed=seed,
         )
     else:
-        vec, fit, _, hist = run_ga_mtm(
+        vec, fit, _, hist = run_sdpm_calibration(
             frames,
             oid,
             pop_size=pop,
@@ -450,9 +450,9 @@ def _metrics(kind, frames, oid, params, rng=None) -> dict:
     if not frames or len(frames) < 2:
         return empty
     if kind == "RAU":
-        m = compute_car_metrics(frames, params, oid, clip_to_envelope=True, rng=rng)
+        m = compute_rau_metrics(frames, params, oid, clip_to_envelope=True, rng=rng)
     else:
-        m = compute_mtm_metrics(
+        m = compute_sdpm_metrics(
             frames,
             params,
             oid,
@@ -515,13 +515,15 @@ def time_one():
     frames = build_frames(index, int(row.run_id), int(row.lane_kf), int(row.id))
     train, test = _split(frames)
     print("train frames", len(train), "test", len(test), "id", row.canonical_id)
-    p = clamp_car_params(random_car_params())
+    from rau_calibration import clamp_rau_parameters, random_rau_parameters
+    p = clamp_rau_parameters(random_rau_parameters())
     t0 = time.time()
-    compute_car_metrics(train, p, int(row.id), clip_to_envelope=True)
+    compute_rau_metrics(train, p, int(row.id), clip_to_envelope=True)
     dt_r = time.time() - t0
-    q = clamp_mtm_params(random_mtm_params())
+    from sdpm_calibration import clamp_sdpm_parameters, random_sdpm_parameters
+    q = clamp_sdpm_parameters(random_sdpm_parameters())
     t0 = time.time()
-    compute_mtm_metrics(
+    compute_sdpm_metrics(
         train,
         q,
         int(row.id),
@@ -530,8 +532,8 @@ def time_one():
     dt_s = time.time() - t0
     print(f"one RAU eval {dt_r:.3f}s  one SDPM eval {dt_s:.3f}s")
     # Repeat RAU to confirm identical score.
-    a = compute_car_metrics(train, p, int(row.id))["Error"]
-    b = compute_car_metrics(train, p, int(row.id))["Error"]
+    a = compute_rau_metrics(train, p, int(row.id))["Error"]
+    b = compute_rau_metrics(train, p, int(row.id))["Error"]
     print("RAU repeat", a, b, "match", abs(a - b) < 1e-12)
 
 

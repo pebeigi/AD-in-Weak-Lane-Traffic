@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Kanagaraj & Treiber (2018) — Mixed Traffic Model (MTM) calibration.
+Adapted self-driven particle model (SDPM) calibration.
 
-Same pipeline and outputs as PT_Car_Calibration / Delpiano_Car_Calibration: load,
-GA, per-vehicle rowdict, ``mtm_car_calib_all_ids.csv``, ``mtm_car_predictions_all_ids.csv``,
+Same pipeline as ``rau_calibration.py``: load, calibrate, evaluate, and export
+per-trajectory results and predictions.
 trajectory plots.
 
-The MTM is a fully 2D microscopic model designed for non-lane-disciplined / mixed traffic;
+The SDPM is a fully 2D microscopic model designed for non-lane-disciplined traffic;
 it does NOT rely on a lane centerline as an attractor. Lateral motion is driven entirely
 by social forces from neighbors (MOBIL-style, with politeness for the follower contributions).
 
 Trajectory figures are mirrored to ./comparison_visualizations/ as
-run_*_lane_*_id_*_SDPM.png (same folder as PT/RL for side-by-side comparison; use
+run_*_direction_*_id_*_SDPM.png (same folder as RAU for side-by-side comparison; use
 ``--no-comparison-plots`` to disable).
 
 pvec9: v0, T, s0, a, b, s0_y, s0_y_tilde, lambda, tau_lat (Tables 1-2 of the paper).
@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from car_data_common import build_frame_data_with_dims
+from trajectory_frames import build_frame_data_with_dimensions
 from comparison_exports import (
     resolve_comparison_output_dir,
     save_figure_to_comparison,
@@ -44,8 +44,8 @@ from highway_geometry import (
     envelope_lower_upper_polylines,
     load_envelope_boundaries,
 )
-from mtm_dynamics import mtm_acceleration_world
-from PT_Car_Calibration import compute_velocities, load_and_preprocess
+from sdpm_dynamics import sdpm_acceleration_world
+from rau_calibration import compute_velocity_components, load_trajectory_data
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(_SCRIPT_DIR, "Final_Lebanon_Data.csv")
@@ -59,7 +59,7 @@ MUTATION_RATE = 0.2
 ELITISM_COUNT = 4
 # Closed-loop early stop: ATE in meters.
 ATE_STOP_M = 2.0
-OUTPUT_DIR = os.path.join(_SCRIPT_DIR, "mtm_car_calibration")
+OUTPUT_DIR = os.path.join(_SCRIPT_DIR, "sdpm_calibration_outputs")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Loss is normalized per-axis: SSE_pos / SS_obs_pos and SSE_speed / SS_obs_speed (unitless).
@@ -81,9 +81,9 @@ PARAM_NAMES = [
     "tau_lat",
 ]
 
-# Clamp bounds — IDM block (0-4) sized for highway speeds, MTM block (5-8) anchored
+# Clamp bounds: longitudinal block (0-4) and lateral SDPM block (5-8).
 # around Kanagaraj-Treiber Table 2 values (s0_y=0.15, s̃0_y=0.30, λ=0.4 s, τ=1 s).
-MTM_BOUNDS = [
+SDPM_BOUNDS = [
     (5.0, 40.0),     # v0  [m/s]
     (0.2, 4.0),      # T   [s]
     (0.5, 6.0),      # s0  [m]
@@ -94,10 +94,10 @@ MTM_BOUNDS = [
     (0.05, 2.0),     # lambda     [s]
     (0.2, 5.0),      # tau_lat    [s]
 ]
-_MUTATE_SCALES = [0.05 * (hi - lo) for (lo, hi) in MTM_BOUNDS]
+_MUTATE_SCALES = [0.05 * (hi - lo) for (lo, hi) in SDPM_BOUNDS]
 
 
-def random_mtm_params():
+def random_sdpm_parameters():
     return [
         random.uniform(15.0, 30.0),  # v0
         random.uniform(0.5, 2.0),    # T
@@ -111,26 +111,26 @@ def random_mtm_params():
     ]
 
 
-def clamp_mtm_params(p):
-    for i, (lo, hi) in enumerate(MTM_BOUNDS):
+def clamp_sdpm_parameters(p):
+    for i, (lo, hi) in enumerate(SDPM_BOUNDS):
         p[i] = min(max(p[i], lo), hi)
     return p
 
 
-def mutate_mtm_params(p, rate=0.2):
+def mutate_sdpm_parameters(p, rate=0.2):
     """Per-parameter Gaussian mutation with step size = 5% of each clamp range."""
     for i in range(len(p)):
         if random.random() < rate:
             p[i] += random.gauss(0.0, _MUTATE_SCALES[i])
-    return clamp_mtm_params(p)
+    return clamp_sdpm_parameters(p)
 
 
-def crossover_mtm_params(p1, p2):
+def crossover_sdpm_parameters(p1, p2):
     idx = random.randint(1, len(p1) - 1)
-    return clamp_mtm_params(p1[:idx] + p2[idx:]), clamp_mtm_params(p2[:idx] + p1[idx:])
+    return clamp_sdpm_parameters(p1[:idx] + p2[idx:]), clamp_sdpm_parameters(p2[:idx] + p1[idx:])
 
 
-def simulate_mtm_single_agent(
+def simulate_sdpm_single_agent(
     px,
     py,
     vx,
@@ -165,7 +165,7 @@ def simulate_mtm_single_agent(
         g = goal_ahead(x, y, run_id, lane_kf)
         if g is not None:
             dest_x, dest_y = g
-        ax, ay, _ = mtm_acceleration_world(
+        ax, ay, _ = sdpm_acceleration_world(
             x,
             y,
             vx_,
@@ -224,7 +224,7 @@ def simulate_mtm_single_agent(
     return x, y, vx_, vy_
 
 
-def compute_mtm_metrics(
+def compute_sdpm_metrics(
     frame_data,
     pvec9,
     focus_id,
@@ -232,7 +232,7 @@ def compute_mtm_metrics(
     envelope_clip_margin_m=0.35,
     rng: random.Random = None,
 ):
-    """Whole-trip closed-loop roll-out (mirrors PT/Delpiano):
+    """Whole-trip closed-loop SDPM rollout:
     one initial truth state, then closed-loop to end, logged neighbors at each segment;
     re-sync to truth on skipped frames (gaps).
 
@@ -260,7 +260,7 @@ def compute_mtm_metrics(
 
         run_id, lane_kf, vid = frame_key(frame_data, focus_id)
         rng = execution_rng(run_id, lane_kf, vid, "sdpm")
-    pvec9 = list(clamp_mtm_params(list(pvec9)))
+    pvec9 = list(clamp_sdpm_parameters(list(pvec9)))
     time_map = {t: {u["id"]: u for u in frame_data[t]} for t in times_list}
     t0 = times_list[0]
     if focus_id not in time_map[t0]:
@@ -297,7 +297,7 @@ def compute_mtm_metrics(
         from_logged = (i == 0) or resynced
         resynced = False
         clip_initial = not from_logged
-        pxp, pyp, vxp, vyp = simulate_mtm_single_agent(
+        pxp, pyp, vxp, vyp = simulate_sdpm_single_agent(
             x,
             y,
             vx,
@@ -430,7 +430,7 @@ def _mp_init(fd, focus_id, clip_e, margin):
 
 
 def _mp_err(pvec):
-    return compute_mtm_metrics(
+    return compute_sdpm_metrics(
         _MPF,
         pvec,
         _MPFID,
@@ -443,7 +443,7 @@ def _mp_err(pvec):
 def evaluate_population_par(frame_data, population, focus_id, n_workers, clip_e, margin):
     if n_workers <= 1:
         return [
-            compute_mtm_metrics(
+            compute_sdpm_metrics(
                 frame_data,
                 p,
                 focus_id,
@@ -471,7 +471,7 @@ def evaluate_population_par(frame_data, population, focus_id, n_workers, clip_e,
             pool.join()
 
 
-def run_ga_mtm(
+def run_sdpm_calibration(
     frame_data_sub,
     focus_id,
     pop_size=POP_SIZE,
@@ -491,7 +491,7 @@ def run_ga_mtm(
 
         run_id, lane_kf, vid = frame_key(frame_data_sub, focus_id)
         random.seed(execution_seed(run_id, lane_kf, vid, "sdpm-search"))
-    population = [clamp_mtm_params(random_mtm_params()) for _ in range(pop_size)]
+    population = [clamp_sdpm_parameters(random_sdpm_parameters()) for _ in range(pop_size)]
     # Seed best_vec from the initial population so it is never None even if the entire first
     # generation scores at the floor (e.g., all candidates produce NaN trajectories).
     best_vec, best_score = list(population[0]), -1e9
@@ -511,7 +511,7 @@ def run_ga_mtm(
             best_vec = list(pop_sorted[0][0])
         err_running = (1.0 / best_score - 1.0) if best_score > 1e-12 else float("inf")
         error_history.append(float(err_running))
-        cur = compute_mtm_metrics(
+        cur = compute_sdpm_metrics(
             frame_data_sub,
             best_vec,
             focus_id,
@@ -527,14 +527,14 @@ def run_ga_mtm(
             k = min(3, len(pop_sorted))
             a = max(random.sample(pop_sorted, k), key=lambda z: z[1])[0]
             b = max(random.sample(pop_sorted, k), key=lambda z: z[1])[0]
-            c1, c2 = crossover_mtm_params(a, b)
-            new_pop.append(mutate_mtm_params(c1, MUTATION_RATE))
+            c1, c2 = crossover_sdpm_parameters(a, b)
+            new_pop.append(mutate_sdpm_parameters(c1, MUTATION_RATE))
             if len(new_pop) < pop_size:
-                new_pop.append(mutate_mtm_params(c2, MUTATION_RATE))
+                new_pop.append(mutate_sdpm_parameters(c2, MUTATION_RATE))
         population = new_pop[:pop_size]
         if (gen + 1) % 10 == 0:
             print(f"GA gen={gen+1}, best fitness={best_score:.5f}")
-    final = compute_mtm_metrics(
+    final = compute_sdpm_metrics(
         frame_data_sub,
         best_vec,
         focus_id,
@@ -545,7 +545,7 @@ def run_ga_mtm(
     return best_vec, best_score, final, error_history
 
 
-def get_predictions_mtm(frame_data_sub, pvec, focus_id, clip_e, margin):
+def get_sdpm_predictions(frame_data_sub, pvec, focus_id, clip_e, margin):
     times_list = sorted(frame_data_sub.keys())
     if len(times_list) < 2:
         return pd.DataFrame([])
@@ -556,7 +556,7 @@ def get_predictions_mtm(frame_data_sub, pvec, focus_id, clip_e, margin):
     u0 = time_dict[t0][focus_id]
     x, y, vx, vy = u0["x"], u0["y"], u0["vx"], u0["vy"]
     rng = _rng_for_params(frame_data_sub, focus_id, pvec)
-    p9 = list(clamp_mtm_params(list(pvec)))
+    p9 = list(clamp_sdpm_parameters(list(pvec)))
     rows = [
         {
             "id": focus_id,
@@ -593,7 +593,7 @@ def get_predictions_mtm(frame_data_sub, pvec, focus_id, clip_e, margin):
         from_logged = (i == 0) or resynced
         resynced = False
         clip_initial = not from_logged
-        pxp, pyp, vxp, vyp = simulate_mtm_single_agent(
+        pxp, pyp, vxp, vyp = simulate_sdpm_single_agent(
             x,
             y,
             vx,
@@ -793,7 +793,7 @@ def parse_args():
     p.add_argument(
         "--no-comparison-plots",
         action="store_true",
-        help="Do not mirror trajectory PNGs to comparison_visualizations/ for PT vs SDPM checks.",
+        help="Do not mirror trajectory PNGs for RAU vs SDPM comparisons.",
     )
     p.add_argument(
         "--comparison-plots-dir",
@@ -839,7 +839,7 @@ def _main():
             "Warning: no envelope CSV — SDPM will use destination-aligned axes (no clipping)."
         )
     print("Loading CSV...")
-    df = load_and_preprocess(CSV_PATH)
+    df = load_trajectory_data(CSV_PATH)
     # Class 2 is the light-vehicle majority in Final_Lebanon_Data.csv (median length 4.99 m).
     # Class 1 is the long-vehicle class (median length 8.21 m).
     df = df[df["class"] == 2.0].copy()
@@ -847,18 +847,21 @@ def _main():
         df["length_smoothed"] = 4.5
     if "width_smoothed" not in df.columns:
         df["width_smoothed"] = 1.7
-    df = compute_velocities(df)
+    df = compute_velocity_components(df)
     print(
-        f"MTM GA: pop={pop_size} gen={generations} step={sample_step} "
+        f"SDPM GA: pop={pop_size} gen={generations} step={sample_step} "
         f"workers={n_workers} clip={clip_e}"
     )
     for run_id in sorted(df["run_id"].unique().tolist()):
-        for lane_val in sorted(df["lane_kf"].unique().tolist()):
-            df_c = df[(df["run_id"] == run_id) & (df["lane_kf"] == lane_val)].copy()
+        for direction_code in sorted(df["lane_kf"].unique().tolist()):
+            df_c = df[
+                (df["run_id"] == run_id) & (df["lane_kf"] == direction_code)
+            ].copy()
             if df_c.empty:
                 continue
             out_dir = os.path.join(
-                OUTPUT_DIR, f"run_{run_id}_lane_{str(lane_val).replace('.', '_')}"
+                OUTPUT_DIR,
+                f"run_{run_id}_direction_{str(direction_code).replace('.', '_')}",
             )
             os.makedirs(out_dir, exist_ok=True)
             counts = df_c.groupby("object_ID").size()
@@ -873,22 +876,25 @@ def _main():
             if args.max_vehicles is not None:
                 cands = cands[: int(args.max_vehicles)]
             if not cands:
-                print(f"Skip run={run_id} lane={lane_val}")
+                print(f"Skip run={run_id} direction={direction_code}")
                 continue
-            print(f"\nrun_id={run_id} lane={lane_val}: {len(cands)} vehicles -> {out_dir}")
+            print(
+                f"\nrun_id={run_id} direction={direction_code}: "
+                f"{len(cands)} vehicles -> {out_dir}"
+            )
             all_results = []
             all_predictions = []
             for k, agent_id in enumerate(cands):
                 print(f"  [{k+1}/{len(cands)}] id={agent_id} rows={counts[agent_id]}")
                 t_id = df_c[df_c["object_ID"] == agent_id]["time"].unique()
                 df_s = df_c[df_c["time"].isin(t_id)].copy()
-                frame_data = build_frame_data_with_dims(
+                frame_data = build_frame_data_with_dimensions(
                     df_s, num_nearest=NUM_NEAREST_NEIGHBORS, sample_step=sample_step
                 )
                 if len(frame_data) < 2:
                     print("    skip: few frames")
                     continue
-                best_vec, best_fit, best_mets, err_hist = run_ga_mtm(
+                best_vec, best_fit, best_mets, err_hist = run_sdpm_calibration(
                     frame_data,
                     agent_id,
                     pop_size=pop_size,
@@ -902,7 +908,7 @@ def _main():
                 for i, name in enumerate(PARAM_NAMES):
                     rowdict[name] = best_vec[i]
                 all_results.append(rowdict)
-                df_p = get_predictions_mtm(frame_data, best_vec, agent_id, clip_e, margin)
+                df_p = get_sdpm_predictions(frame_data, best_vec, agent_id, clip_e, margin)
                 if not df_p.empty:
                     df_p = df_p.copy()
                     df_p["ATE"] = best_mets["ATE"]
@@ -914,7 +920,7 @@ def _main():
                         agent_id,
                         out_dir,
                         run_id=run_id,
-                        lane_kf=lane_val,
+                        lane_kf=direction_code,
                         error_history=err_hist,
                         comparison_dir=comparison_dir_vis,
                         comparison_model_slug="SDPM",
@@ -922,12 +928,12 @@ def _main():
                     print(f"  Saved plot: trajectory_id_{agent_id}.png")
             if all_results:
                 df_res = pd.DataFrame(all_results)
-                out_csv = os.path.join(out_dir, "mtm_car_calib_all_ids.csv")
+                out_csv = os.path.join(out_dir, "sdpm_calibration_results.csv")
                 df_res.to_csv(out_csv, index=False)
                 print(f"Saved combo results: {out_csv} ({len(df_res)} rows)")
             if all_predictions:
                 df_pred_all = pd.concat(all_predictions, ignore_index=True)
-                out_pred = os.path.join(out_dir, "mtm_car_predictions_all_ids.csv")
+                out_pred = os.path.join(out_dir, "sdpm_predictions.csv")
                 df_pred_all.to_csv(out_pred, index=False)
                 print(f"Saved combo predictions: {out_pred}")
     print("Done. Outputs under:", OUTPUT_DIR)

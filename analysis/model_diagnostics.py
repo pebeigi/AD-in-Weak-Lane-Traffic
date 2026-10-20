@@ -8,7 +8,6 @@ used during calibration, so the default rollout reproduces the stored scores.
 
 from __future__ import annotations
 
-import math
 import random
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -19,8 +18,8 @@ import pandas as pd
 from analysis.paired_pipeline import RAU_NAMES, SDPM_NAMES, _load_index, _metrics, _split, build_frames
 from analysis.paired_statistics import _boot_ci, _wilcoxon
 from analysis.trajectory_seed import execution_seed
-from MTM_Car_Calibration import MTM_BOUNDS, compute_mtm_metrics
-from PT_Car_Calibration import compute_car_metrics
+from sdpm_calibration import SDPM_BOUNDS, compute_sdpm_metrics
+from rau_calibration import compute_rau_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "outputs" / "results"
@@ -30,7 +29,7 @@ TAB = ROOT / "outputs" / "tables"
 HORIZONS = (2.0, 5.0, 10.0, 15.0)
 N_REPLICATES = 20
 
-# Clamp bounds in clamp_car_params (PT_Car_Calibration.py).
+# Clamp bounds in ``rau_calibration.clamp_rau_parameters``.
 RAU_META = [
     ("Wcc", r"W_{cc}", "conflict penalty weight", "--", 10.0, 5000.0),
     ("eta", r"\eta", "value scale", "--", 0.1, 10.0),
@@ -39,7 +38,7 @@ RAU_META = [
     ("v_pref", r"v_{\mathrm{pref}}", "preferred speed", "m/s", 1.0, 50.0),
     ("Wb", r"W_b", "corridor penalty weight", "--", 0.0, 10000.0),
 ]
-# Clamp bounds in MTM_BOUNDS (MTM_Car_Calibration.py), same order as SDPM_NAMES.
+# Clamp bounds in ``SDPM_BOUNDS``, in the same order as ``SDPM_NAMES``.
 SDPM_META = [
     ("v0", r"v_0", "desired speed", "m/s"),
     ("T", r"T", "desired time gap", "s"),
@@ -55,9 +54,9 @@ SDPM_META = [
 
 def _trace(kind, frames, oid, vec, rng=None):
     if kind == "RAU":
-        m = compute_car_metrics(frames, vec, oid, clip_to_envelope=True, rng=rng)
+        m = compute_rau_metrics(frames, vec, oid, clip_to_envelope=True, rng=rng)
     else:
-        m = compute_mtm_metrics(frames, vec, oid, clip_to_envelope=True, rng=rng)
+        m = compute_sdpm_metrics(frames, vec, oid, clip_to_envelope=True, rng=rng)
     times = sorted(frames)
     elapsed = np.asarray(times[1:]) - times[0]
     err = np.hypot(np.asarray(m["sim_x"]) - np.asarray(m["obs_x"]),
@@ -125,7 +124,7 @@ def _bound_row(model, name, symbol, meaning, unit, lo, hi, col):
 
 def parameter_bounds(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    for (name, symbol, meaning, unit), (lo, hi) in zip(SDPM_META, MTM_BOUNDS):
+    for (name, symbol, meaning, unit), (lo, hi) in zip(SDPM_META, SDPM_BOUNDS):
         rows.append(_bound_row("SDPM", name, symbol, meaning, unit, lo, hi,
                                df[f"SDPM_{name}"].to_numpy(dtype=float)))
     for name, symbol, meaning, unit, lo, hi in RAU_META:

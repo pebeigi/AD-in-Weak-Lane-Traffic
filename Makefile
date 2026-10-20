@@ -37,12 +37,12 @@ analysis: data
 	$(RUN) analysis.plot_corridors
 	$(RUN) analysis.dataset_figures
 	$(RUN) analysis.paired_statistics
-	$(RUN) analysis.final_diagnostics
+	$(RUN) analysis.model_diagnostics
 	$(RUN) analysis.transfer_and_sensitivity
 	$(RUN) analysis.interaction_regime
 	$(RUN) analysis.generate_paper_figures
 	$(RUN) analysis.generate_tables
-	$(RUN) analysis.width_audit
+	$(RUN) analysis.recording_dimension_audit
 
 all: data test analysis
 

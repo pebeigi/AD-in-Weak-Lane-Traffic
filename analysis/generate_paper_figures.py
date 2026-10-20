@@ -18,8 +18,8 @@ import pandas as pd
 
 import highway_geometry as hg
 from analysis.paired_pipeline import RAU_NAMES, SDPM_NAMES, _load_index, _split, build_frames
-from MTM_Car_Calibration import compute_mtm_metrics
-from PT_Car_Calibration import compute_car_metrics
+from sdpm_calibration import compute_sdpm_metrics
+from rau_calibration import compute_rau_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
 FIG = ROOT / "outputs" / "figures"
@@ -55,9 +55,9 @@ def _save(fig, name):
 
 def _trace(kind, frames, oid, vec):
     if kind == "RAU":
-        m = compute_car_metrics(frames, vec, oid, clip_to_envelope=True)
+        m = compute_rau_metrics(frames, vec, oid, clip_to_envelope=True)
     else:
-        m = compute_mtm_metrics(frames, vec, oid, clip_to_envelope=True)
+        m = compute_sdpm_metrics(frames, vec, oid, clip_to_envelope=True)
     times = sorted(frames)
     u0 = frames[times[0]][0]
     t = np.asarray(times) - times[0]

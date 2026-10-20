@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Shared filenames for trajectory comparison figures across PT (GA / RL) and SDPM.
+Shared filenames for RAU and SDPM trajectory-comparison figures.
 
 Plots are mirrored into ``comparison_visualizations/`` beside the Lebanon scripts
 (default) using::
 
-    run_{run_id}_lane_{lane_kf}_id_{vehicle_id}_{MODEL}.png
+    run_{run_id}_direction_{direction_id}_id_{vehicle_id}_{MODEL}.png
 
 Examples::
 
-    run_1_lane_2_id_4375_PT_GA.png
-    run_1_lane_2_id_4375_PT_RL.png
-    run_1_lane_2_id_4375_SDPM.png
+    run_1_direction_2_id_4375_RAU.png
+    run_1_direction_2_id_4375_SDPM.png
 """
 
 from __future__ import annotations
@@ -19,11 +18,11 @@ from __future__ import annotations
 import os
 
 
-def comparison_plot_filename(run_id, lane_kf, agent_id, model_slug: str) -> str:
+def comparison_plot_filename(run_id, direction_id, agent_id, model_slug: str) -> str:
     """Stable, filesystem-safe name for sorting and diffing."""
     r = "__" if run_id is None else str(run_id).replace(".", "_").replace("/", "_")
-    l = "__" if lane_kf is None else str(lane_kf).replace(".", "_").replace("/", "_")
-    return f"run_{r}_lane_{l}_id_{int(agent_id)}_{model_slug}.png"
+    d = "__" if direction_id is None else str(direction_id).replace(".", "_").replace("/", "_")
+    return f"run_{r}_direction_{d}_id_{int(agent_id)}_{model_slug}.png"
 
 
 def resolve_comparison_output_dir(cli_value: str | None, script_dir: str) -> str | None:
@@ -41,7 +40,7 @@ def save_figure_to_comparison(
     fig,
     comparison_dir: str | None,
     run_id,
-    lane_kf,
+    direction_id,
     agent_id,
     model_slug: str,
     bbox_inches: str | None = "tight",
@@ -50,7 +49,7 @@ def save_figure_to_comparison(
     if not comparison_dir:
         return None
     os.makedirs(comparison_dir, exist_ok=True)
-    name = comparison_plot_filename(run_id, lane_kf, agent_id, model_slug)
+    name = comparison_plot_filename(run_id, direction_id, agent_id, model_slug)
     path = os.path.join(comparison_dir, name)
     fig.savefig(path, bbox_inches=bbox_inches)
     return path
