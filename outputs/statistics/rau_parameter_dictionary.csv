@@ -1,0 +1,7 @@
+code,symbol,meaning,units,lower,upper
+Wcc,W_cc,conflict penalty weight,1,10.0,5000
+eta,eta,progress scale,1,0.1,10
+xi,xi,speed-curvature exponent,1,0.1,15
+tau,tau,execution-noise relaxation,s,0.1,3
+v_pref,v_pref,preferred speed,m/s,1.0,50
+Wb,W_b,corridor-boundary penalty,1,0.0,10000

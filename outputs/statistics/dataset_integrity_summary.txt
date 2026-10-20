@@ -1,0 +1,37 @@
+Canonical trajectory key: (run_id, lane_kf, id).
+id is not globally unique.
+
+raw_rows: 3006441
+unique_canonical_trajectories: 7486
+ids_reused_across_run_id: 815
+ids_reused_across_lane_kf: 389
+sample_interval_s: 0.1
+frames_with_gap_gt_0.15s: 0
+max_gap_s: 0.0
+duration_s_p50: 41.5
+duration_s_p10: 2.8
+duration_s_p90: 76.8
+path_m_p50: 369.47
+path_m_p10: 21.171
+path_m_p90: 573.78
+unique_raw_id_in_run_1: 4115
+unique_raw_id_in_run_2: 3371
+trajectories_run1_dir1: 1993
+trajectories_run1_dir2: 2122
+trajectories_run2_dir1: 1892
+trajectories_run2_dir2: 1479
+rows_class_0: 10869
+rows_class_1: 197438
+rows_class_2: 2798134
+trajectories_class0_run1_dir1: 53
+trajectories_class0_run1_dir2: 62
+trajectories_class0_run2_dir1: 50
+trajectories_class0_run2_dir2: 75
+trajectories_class1_run1_dir1: 110
+trajectories_class1_run1_dir2: 118
+trajectories_class1_run2_dir1: 71
+trajectories_class1_run2_dir2: 71
+trajectories_class2_run1_dir1: 1830
+trajectories_class2_run1_dir2: 1942
+trajectories_class2_run2_dir1: 1771
+trajectories_class2_run2_dir2: 1333

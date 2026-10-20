@@ -1,0 +1,13 @@
+Python 3.9.6
+numpy 2.0.2
+pandas 2.3.3
+matplotlib 3.9.4
+scipy: not installed (bootstrap, Wilcoxon, Holm, and Spearman implemented in analysis/paired_statistics.py and analysis/interaction_regime.py)
+Experiment seed: 20261004
+Extended-cohort search offset: 5000
+Main-cohort draw seed: 20261021 (20261004 + 17)
+Execution seed: first 4 bytes (little-endian) of SHA-256("20261004|run|lane|id|stream"), stream in {sdpm, rau, {model}-replicate-{k}}
+Bootstrap draws: 5000 (seed 20261004)
+Git commit: none (this directory is not a git repository)
+Compiler: tectonic, elsarticle 5p twocolumn
+Paired result file: outputs/results/paired_model_results.csv (100 trajectories, 0 failures; final rerun of 5 October 2026)

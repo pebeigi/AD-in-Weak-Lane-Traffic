@@ -1,0 +1,10 @@
+code,symbol,meaning,units,lower,upper
+v0,v0,desired speed in the IDM core,m/s,5.0,40.0
+T,T,desired time gap,s,0.2,4.0
+s0,s0,minimum gap,m,0.5,6.0
+a,a,maximum acceleration,m/s^2,0.3,4.0
+b,b,comfortable deceleration,m/s^2,0.3,5.0
+s0_y,s0_y,lateral attenuation scale,m,0.05,1.0
+s0_y_tilde,s0_y_tilde,lateral gap scale,m,0.05,1.5
+lambda,lambda,lateral sensitivity,s,0.05,2.0
+tau_lat,tau_lat,lateral relaxation time,s,0.2,5.0

@@ -1,0 +1,19 @@
+# Decompressed data (stored compressed in data/)
+/Final_Lebanon_Data.csv
+
+# Regenerated cache (about 150 MB)
+outputs/cache/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# LaTeX tables and macros written by `make analysis`
+paper/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/

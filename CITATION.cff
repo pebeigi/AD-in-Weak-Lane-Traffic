@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this code or data, please cite the paper below."
+title: "Jounieh freeway trajectory dataset and SDPM-RAU paired comparison"
+authors:
+  - family-names: Khoueiry
+    given-names: Michel S.
+    affiliation: The George Washington University
+    orcid: "https://orcid.org/0009-0004-6818-9468"
+    email: mskhoueiry@gwu.edu
+  - family-names: Beigi
+    given-names: Pedram
+    affiliation: The George Washington University
+  - family-names: Hamdar
+    given-names: Samer H.
+    affiliation: The George Washington University
+    orcid: "https://orcid.org/0000-0001-6896-367X"
+license: MIT
+keywords:
+  - naturalistic aerial trajectory data
+  - weak lane discipline
+  - self-driven particle model
+  - risk-taking acceleration model
+  - microscopic traffic modeling
+preferred-citation:
+  type: article
+  title: "Weak-Lane Freeway Driving in Jounieh, Lebanon: A Naturalistic Aerial Trajectory Dataset and a Paired Comparison of Particle and Risk-Aware Interaction Models"
+  authors:
+    - family-names: Khoueiry
+      given-names: Michel S.
+    - family-names: Beigi
+      given-names: Pedram
+    - family-names: Hamdar
+      given-names: Samer H.
+  journal: "Transportation Research Part C: Emerging Technologies"
+  year: 2026
+  notes: "Manuscript submitted for publication."

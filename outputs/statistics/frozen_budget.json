@@ -1,0 +1,1 @@
+{"pop": 20, "gen": 40, "source": "optimizer_stability.csv", "rule": "smallest budget unless the next larger one gains 0.02 median fitness or 0.15 worst-run fitness"}
