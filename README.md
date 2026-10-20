@@ -20,6 +20,25 @@ It contains:
    - a risk-aware utility model (**RAU**), in the line of the sequential risk-taking models of Hamdar et al. (2008, 2015).
 3. **The analysis pipeline.** Every number, table, and data-driven figure in the paper is generated from the files in `outputs/`.
 
+## Results at a glance
+
+### Traffic conditions in the two recordings
+
+The time--space diagrams show mean speed along the road for both directions in
+both recordings. The recurring diagonal low-speed bands (red) are upstream-
+moving congestion waves; direction 2 is generally slower than direction 1.
+
+![Time--space diagrams of mean speed for both recordings and directions](outputs/figures/dataset_timespace.png)
+
+### Held-out model comparison
+
+The box plots compare the two models on the same 100 held-out trajectories.
+RAU has lower longitudinal, final-displacement, and speed errors, while SDPM
+has lower lateral error. These plots summarize distributions; paired tests and
+effect sizes are reported in `outputs/statistics/paired_tests.csv`.
+
+![Held-out comparison of SDPM and RAU errors](outputs/figures/final_model_comparison.png)
+
 ## Repository layout
 
 ```
