@@ -1,12 +1,12 @@
-# Weak-lane freeway driving in Jounieh, Lebanon
+<h1 align="center">Weak-lane Freeway Driving: A Naturalistic Trajectory Dataset and Evaluation of Interaction Models</h1>
 
-[![Reproducibility checks](https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/actions/workflows/reproducibility.yml/badge.svg)](https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/actions/workflows/reproducibility.yml)
-[![Under Review at: TR Part C: Emerging Technologies](https://img.shields.io/badge/Under%20Review%20at-TR%20Part%20C%3A%20Emerging%20Technologies-0B6E75)](https://www.sciencedirect.com/journal/transportation-research-part-c-emerging-technologies)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB)](https://www.python.org/)
-[![Code license: MIT](https://img.shields.io/badge/code%20license-MIT-blue.svg)](LICENSE)
-[![Data license: CC BY 4.0](https://img.shields.io/badge/data%20license-CC%20BY%204.0-lightgrey.svg)](data/LICENSE)
-
-![Conceptual illustration of trajectory-aware driving on a coastal freeway](docs/social-preview.png)
+<p align="center">
+  <a href="https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/actions/workflows/reproducibility.yml"><img alt="Reproducibility checks" src="https://github.com/pebeigi/AD-in-Weak-Lane-Traffic/actions/workflows/reproducibility.yml/badge.svg"></a>
+  <a href="https://www.sciencedirect.com/journal/transportation-research-part-c-emerging-technologies"><img alt="Under Review at: TR Part C: Emerging Technologies" src="https://img.shields.io/badge/Under%20Review%20at-TR%20Part%20C%3A%20Emerging%20Technologies-0B6E75"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9%2B-3776AB"></a>
+  <a href="LICENSE"><img alt="Code license: MIT" src="https://img.shields.io/badge/code%20license-MIT-blue.svg"></a>
+  <a href="data/LICENSE"><img alt="Data license: CC BY 4.0" src="https://img.shields.io/badge/data%20license-CC%20BY%204.0-lightgrey.svg"></a>
+</p>
 
 This repository holds the data, code, and outputs for the paper:
 
